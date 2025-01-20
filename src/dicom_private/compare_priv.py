@@ -92,7 +92,7 @@ def diff_new(old, new):
     codes = difflib.SequenceMatcher(a=old, b=new).get_opcodes()
     new2 = ""
     had_del = False
-    if new == "Unknown":
+    if new in ("Unknown", "?"):
         return new
     for code in codes:
         op = code[0]
@@ -119,7 +119,7 @@ def html_compare(source_dicts, descriptions):
         content.append(header)
         for tag, vals in tag_dict.items():
             str_vals = [escape(val[NAME]) if val else "" for val in vals]
-            non_empty = [s for s in str_vals if s and s != "Unknown"]   
+            non_empty = [s for s in str_vals if s and s not in ("?", "Unknown")]   
             if non_empty:
                 if len(non_empty) == 1:
                     div_vals = [
@@ -148,11 +148,12 @@ def html_compare(source_dicts, descriptions):
 
 if __name__ == "__main__":
     from dicom_private.dicts.dcmtk import dcmtk_dict
+    from dicom_private.dicts.dicom3tools import dicom3tools_dict
     from dicom_private.dicts.gdcm import gdcm_dict
     from dicom_private.dicts.tcia import tcia_dict
 
-    source_dicts = (dcmtk_dict, gdcm_dict, tcia_dict)
-    descriptions = ["DCMTK", "GDCM", "TCIA"]
+    source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict)
+    descriptions = ["DCMTK", "dicom3tools", "GDCM", "TCIA"]
 
     # union_dict = compare(source_dicts)
     html = html_compare(source_dicts, descriptions) 

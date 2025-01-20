@@ -6,6 +6,7 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
+DATA_PATH = HERE / "data_sources"
 DICTS_PATH = HERE / "dicts"
 DICTS_PATH.mkdir(exist_ok=True)
 REPORT_PATH = HERE / "output"
