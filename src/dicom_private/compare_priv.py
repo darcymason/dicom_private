@@ -2,6 +2,7 @@
 """Gather various private dicts and output files for easy diff
 """
 from collections import defaultdict
+import difflib
 from dicom_private.core import REPORT_PATH
 from html import escape
 
@@ -37,7 +38,7 @@ HTML_DOC_TEMPLATE = """
 /* Color markup for diffs */
 .diff_add {{background-color:#aaffaa}}
 .diff_chg {{background-color:#ffff77; word-wrap: break-word;}}
-.diff_sub {{background-color:#ffaaaa; word-wrap: break-word;}}
+.diff_sub {{background-color:#ffcccc; word-wrap: break-word;text-decoration:line-through;}}
 
 </style>
 </head>
@@ -80,7 +81,33 @@ def compare(source_dicts):
                 entry_list.append(val)
             union[creator][tag] = entry_list
     return union
-       
+
+
+
+red = lambda text: f'<span class="diff_sub">{text}</span>'
+green = lambda text: f'<span class="diff_add">{text}</span>'
+yellow = lambda text: f'<span class="diff_chg">{text}</span>'
+
+def diff_new(old, new):
+    codes = difflib.SequenceMatcher(a=old, b=new).get_opcodes()
+    new2 = ""
+    had_del = False
+    if new == "Unknown":
+        return new
+    for code in codes:
+        op = code[0]
+        if op == "equal": 
+            new2 += new[code[3]:code[4]]
+        elif op == "delete":
+            new2 += red(old[code[1]:code[2]])
+            had_del = True
+        elif op == "insert":
+            new2 += green(new[code[3]:code[4]])
+        elif op == "replace":
+            new2 += yellow(new[code[3]:code[4]])
+    return new2 + (f"--> ({new})" if had_del else "")
+
+
 def html_compare(source_dicts, descriptions):
     """Return a string representing HTML to compare the source dicts"""
     union = compare(source_dicts)
@@ -91,12 +118,26 @@ def html_compare(source_dicts, descriptions):
         content.append('<div class="container">')
         content.append(header)
         for tag, vals in tag_dict.items():
-            str_vals = [val[NAME] if val else "" for val in vals]
-            div_vals = [f"<div>{escape(val)}</div>" for val in str_vals]
+            str_vals = [escape(val[NAME]) if val else "" for val in vals]
+            non_empty = [s for s in str_vals if s and s != "Unknown"]   
+            if non_empty:
+                if len(non_empty) == 1:
+                    div_vals = [
+                       f"<div>{green(s) if s==non_empty[0] else s}</div>" 
+                       for s in str_vals
+                    ] 
+                else:
+                    div_vals = [
+                        f"<div>{diff_new(non_empty[0], s) if s else ""}</div>"
+                        for s in str_vals
+                    ] 
+            else:  # could include 'Unknown's
+                div_vals = [f"<div>{s}</div>" for s in str_vals]
             content.append(f"<div>{tag}</div>\n{"\n".join(div_vals)}")
         content.append("</div>") # end of container
     content = "\n".join(content)
-    num_cols = len(source_dicts) + 1    
+    num_cols = len(source_dicts) + 1  
+    # Can't get nth-child range to work so just list each one  
     alt_rows_css_def = ",\n".join(
         f".container > div:nth-child({2*num_cols}n+{i})"
         for i in range(1, num_cols+1)
@@ -115,5 +156,5 @@ if __name__ == "__main__":
 
     # union_dict = compare(source_dicts)
     html = html_compare(source_dicts, descriptions) 
-    with open(REPORT_PATH / "dcmtk_gdcm_tcia.html", "w", encoding="utf-8") as f:
+    with open(REPORT_PATH / "index.html", "w", encoding="utf-8") as f:
         f.write(html)
