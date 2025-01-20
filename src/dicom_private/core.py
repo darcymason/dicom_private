@@ -6,9 +6,9 @@ from pathlib import Path
 
 
 HERE = Path(__file__).resolve().parent
-OUT_PATH = HERE / "dicts"
-OUT_PATH.mkdir(exist_ok=True)
-
+DICTS_PATH = HERE / "dicts"
+DICTS_PATH.mkdir(exist_ok=True)
+REPORT_PATH = HERE / "output"
 
 # From pydicom's generate_private_dict script,
 # modified to add the Type info directly
@@ -40,7 +40,7 @@ def write_dict(dict_entries, filename, *, docstring, py_name):
     py_name : str
         The variable name for the dictionary written in the .py file
     """
-    filepath = OUT_PATH / filename
+    filepath = DICTS_PATH / filename
     print(f"Writing python file {filepath}...", end="")
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(f'"""\n{docstring}"""\n')

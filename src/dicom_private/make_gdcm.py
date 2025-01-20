@@ -8,7 +8,7 @@ from collections import defaultdict
 import sys
 
 from pydicom.valuerep import VR
-from dicom_private.core import OUT_PATH, write_dict
+from dicom_private.core import DICTS_PATH, write_dict
 
 
 GDCM_PRIVATE_DICT = (

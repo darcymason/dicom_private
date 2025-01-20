@@ -2,7 +2,53 @@
 """Gather various private dicts and output files for easy diff
 """
 from collections import defaultdict
+from dicom_private.core import REPORT_PATH
+from html import escape
 
+VR, VM, NAME = range(3)  # index into dict results
+
+HTML_DOC_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+.container {{
+  display: grid;
+  grid-template-columns: repeat({num_cols}, auto);
+  padding: 10px;
+  padding-top: 0px;
+}}
+
+.container > div {{
+  background-color: #f8f8f8;
+  border: 1px solid black;
+  padding: 5px;
+  text-align: left;
+}}
+
+/* Alternating rows */
+{alt_rows_css_def} {{
+  background-color: #e8f1f1;
+}}
+
+/* Header for each table */
+.container > div:nth-child(-n + {num_cols}) {{ background-color: #d1d1d1; }}
+
+/* Color markup for diffs */
+.diff_add {{background-color:#aaffaa}}
+.diff_chg {{background-color:#ffff77; word-wrap: break-word;}}
+.diff_sub {{background-color:#ffaaaa; word-wrap: break-word;}}
+
+</style>
+</head>
+<body>
+
+<main id="scroll-element">
+{content}
+</main>
+</body>
+</html>
+"""
 
 def compare(source_dicts):
     """Collapse private dicts into something like:
@@ -35,6 +81,29 @@ def compare(source_dicts):
             union[creator][tag] = entry_list
     return union
        
+def html_compare(source_dicts, descriptions):
+    """Return a string representing HTML to compare the source dicts"""
+    union = compare(source_dicts)
+    header = "<div>Tag</div>" + "".join(f"<div>{descr}</div>" for descr in descriptions)
+    content = []
+    for creator, tag_dict in union.items():
+        content.append(f"<h1>{escape(creator)}</h1>")
+        content.append('<div class="container">')
+        content.append(header)
+        for tag, vals in tag_dict.items():
+            str_vals = [val[NAME] if val else "" for val in vals]
+            div_vals = [f"<div>{escape(val)}</div>" for val in str_vals]
+            content.append(f"<div>{tag}</div>\n{"\n".join(div_vals)}")
+        content.append("</div>") # end of container
+    content = "\n".join(content)
+    num_cols = len(source_dicts) + 1    
+    alt_rows_css_def = ",\n".join(
+        f".container > div:nth-child({2*num_cols}n+{i})"
+        for i in range(1, num_cols+1)
+    )
+    return HTML_DOC_TEMPLATE.format(
+        num_cols=num_cols, content=content, alt_rows_css_def=alt_rows_css_def
+    )
 
 if __name__ == "__main__":
     from dicom_private.dicts.dcmtk import dcmtk_dict
@@ -44,5 +113,7 @@ if __name__ == "__main__":
     source_dicts = (dcmtk_dict, gdcm_dict, tcia_dict)
     descriptions = ["DCMTK", "GDCM", "TCIA"]
 
-    union_dict = compare(source_dicts)
-    print(union_dict)
+    # union_dict = compare(source_dicts)
+    html = html_compare(source_dicts, descriptions) 
+    with open(REPORT_PATH / "dcmtk_gdcm_tcia.html", "w", encoding="utf-8") as f:
+        f.write(html)
