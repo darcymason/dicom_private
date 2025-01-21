@@ -5,6 +5,7 @@ from collections import defaultdict
 import difflib
 from dicom_private.core import REPORT_PATH
 from html import escape
+from urllib.parse import quote
 
 VR, VM, NAME = range(3)  # index into dict results
 
@@ -51,7 +52,7 @@ HTML_DOC_TEMPLATE = """
 </html>
 """
 
-def compare(source_dicts):
+def make_union_dict(source_dicts):
     """Collapse private dicts into something like:
         creator/tag -> list(each source's result or None),
         e.g.
@@ -62,6 +63,8 @@ def compare(source_dicts):
             },
             ...
         }
+
+    i.e. creator -> tag - > list of results from the source dicts
     """
     union = defaultdict(dict)
     all_creators = sorted(set().union(*[di.keys() for di in source_dicts]))
@@ -83,6 +86,17 @@ def compare(source_dicts):
     return union
 
 
+
+def non_empty_creators(union_dict):
+    non_empty = []
+    for creator, tagdict in union_dict.items():
+        if any(
+            source_entry and source_entry[NAME] not in ["?", "Unknown"]
+            for (tag, source_entries) in tagdict.items()
+            for source_entry in source_entries
+        ):
+            non_empty.append(creator)
+    return non_empty
 
 red = lambda text: f'<span class="diff_sub">{text}</span>'
 green = lambda text: f'<span class="diff_add">{text}</span>'
@@ -108,13 +122,22 @@ def diff_new(old, new):
     return new2 + (f"--> ({new})" if had_del else "")
 
 
-def html_compare(source_dicts, descriptions):
-    """Return a string representing HTML to compare the source dicts"""
-    union = compare(source_dicts)
-    header = "<div>Tag</div>" + "".join(f"<div>{descr}</div>" for descr in descriptions)
-    content = []
-    for creator, tag_dict in union.items():
-        content.append(f"<h1>{escape(creator)}</h1>")
+def html_compare(source_dicts, source_names):
+    """Return two string representing HTML for non-empty and empty creators"""
+    union_dict = make_union_dict(source_dicts)
+    creators_non_empty = non_empty_creators(union_dict)
+
+    header = "<div>Tag</div>" + "".join(f"<div>{descr}</div>" for descr in source_names)
+    main_content = []
+    unknown_content = []
+    for creator, tag_dict in union_dict.items():
+        content = main_content
+        if creator not in creators_non_empty:
+            main_content.append(
+                f'<h1>{escape(creator)}: <a href="unknowns.html#{quote(creator)}">All unknown</a></h1>'
+            )
+            content = unknown_content  # for rest of this loop
+        content.append(f'<h1 id="{quote(creator)}">{escape(creator)}</h1>')
         content.append('<div class="container">')
         content.append(header)
         for tag, vals in tag_dict.items():
@@ -135,16 +158,22 @@ def html_compare(source_dicts, descriptions):
                 div_vals = [f"<div>{s}</div>" for s in str_vals]
             content.append(f"<div>{tag}</div>\n{"\n".join(div_vals)}")
         content.append("</div>") # end of container
-    content = "\n".join(content)
+    main_content = "\n".join(main_content)
+    unknown_content = "\n".join(unknown_content)
     num_cols = len(source_dicts) + 1  
     # Can't get nth-child range to work so just list each one  
     alt_rows_css_def = ",\n".join(
         f".container > div:nth-child({2*num_cols}n+{i})"
         for i in range(1, num_cols+1)
     )
-    return HTML_DOC_TEMPLATE.format(
-        num_cols=num_cols, content=content, alt_rows_css_def=alt_rows_css_def
+    
+    html_main = HTML_DOC_TEMPLATE.format(
+        num_cols=num_cols, content=main_content, alt_rows_css_def=alt_rows_css_def
     )
+    html_unknown = HTML_DOC_TEMPLATE.format(
+        num_cols=num_cols, content=unknown_content, alt_rows_css_def=alt_rows_css_def
+    )
+    return html_main, html_unknown
 
 if __name__ == "__main__":
     from dicom_private.dicts.dcmtk import dcmtk_dict
@@ -155,7 +184,14 @@ if __name__ == "__main__":
     source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict)
     descriptions = ["DCMTK", "dicom3tools", "GDCM", "TCIA"]
 
-    # union_dict = compare(source_dicts)
-    html = html_compare(source_dicts, descriptions) 
-    with open(REPORT_PATH / "index.html", "w", encoding="utf-8") as f:
+    html, unknowns = html_compare(source_dicts, descriptions) 
+    
+    main_file = REPORT_PATH / "index.html"
+    unknowns_file = REPORT_PATH / "unknowns.html"
+    print(f"Write {main_file}")
+    with open(main_file, "w", encoding="utf-8") as f:
         f.write(html)
+    print(f"Write {unknowns_file}")
+    with open(unknowns_file, "w", encoding="utf-8") as f:
+        f.write(unknowns)
+    
