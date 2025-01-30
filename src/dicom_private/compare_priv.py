@@ -3,6 +3,7 @@
 """
 from collections import defaultdict
 import difflib
+import itertools
 from dicom_private.core import REPORT_PATH
 from html import escape
 from urllib.parse import quote
@@ -121,6 +122,25 @@ def diff_new(old, new):
             new2 += yellow(new[code[3]:code[4]])
     return new2 + (f"--> ({new})" if had_del else "")
 
+def make_creator_compare_table(tag_dict, source_names):
+    """Return one (text-only) 2D table of the compared sources and a list of which 'contributed'
+    First table row is "Tag", then names of sources.    
+    Table row is simple list [tag, source1 name or keyword, source2 name or keyword, ...]
+    """
+
+    rows = [("Tag", *source_names)]
+    for tag, entries in tag_dict.items():
+        rows.append([tag] + [escape(entry[NAME]) if entry else "" for entry in entries])
+    
+    # Determine who contributed by columns non-empty (after header)
+    # Transpose with zip(*)
+    tr = zip(*rows[1:])
+    col_non_empty = [
+        any([e and (e.lower() not in ("?", "Unknown")) for e in col]) for col in tr
+    ]
+    contributed = itertools.compress(source_names, col_non_empty[1:]) # 1: for tag col
+    return rows, list(contributed)
+    
 
 def html_compare(source_dicts, source_names):
     """Return two string representing HTML for non-empty and empty creators"""
@@ -175,6 +195,18 @@ def html_compare(source_dicts, source_names):
     )
     return html_main, html_unknown
 
+
+def tag_creator_dict(priv_dict):
+    """Given a single private dict source, list tags that appear in multiple private creators"""
+    # Invert the dict from creator: (tag: (VR, VM, name, is_retired))
+    #   to tag: {creator: [(VR, VM, name, is_retired)]
+    inverted = defaultdict(lambda: defaultdict(list))
+    for creator, tagdict in priv_dict.items():
+        for tag, vals in tagdict.items():
+            inverted[tag][creator].append(vals)
+    return inverted
+
+
 if __name__ == "__main__":
     from dicom_private.dicts.dcmtk import dcmtk_dict
     from dicom_private.dicts.dicom3tools import dicom3tools_dict
@@ -182,9 +214,15 @@ if __name__ == "__main__":
     from dicom_private.dicts.tcia import tcia_dict
 
     source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict)
-    descriptions = ["DCMTK", "dicom3tools", "GDCM", "TCIA"]
+    source_names = ["DCMTK", "dicom3tools", "GDCM", "TCIA"]
 
-    html, unknowns = html_compare(source_dicts, descriptions) 
+    union_dict = make_union_dict(source_dicts)
+    for creator in ("SIEMENS CSA HEADER", "SIEMENS CSA NON-IMAGE", "SIEMENS CSA REPORT", "SIEMENS CT APPL DATASET"):
+        tbl, contrib = make_creator_compare_table(union_dict[creator], source_names)
+        print(contrib)
+
+    xdfdf
+    html, unknowns = html_compare(source_dicts, source_names) 
     
     main_file = REPORT_PATH / "index.html"
     unknowns_file = REPORT_PATH / "unknowns.html"
