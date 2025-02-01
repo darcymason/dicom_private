@@ -13,7 +13,7 @@ from collections import namedtuple
 
 
 DICOM_SAFE_PRIVATE_URL = (
-    r"https://dicom.nema.org/medical/dicom/current/output/html/part15.html"
+    r"https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml"
 )
 fields = "tag creator vr vm meaning".split()
 Entry = namedtuple("Entry", fields)
@@ -51,7 +51,7 @@ def entry_reader(xml_text):
     
     td_paras = tbl.findall(".//ns:para", namespaces=namespaces)
     for i in range(5, len(td_paras), 5):  # one row at a time; skip header
-        yield Entry(*(e.text for e in td_paras[i:i+5]))
+        yield Entry(*("".join(e.itertext()) for e in td_paras[i:i+5]))
 
 def private_dictionaries(xml_text):
     priv_dict = defaultdict(dict)
@@ -65,11 +65,8 @@ def private_dictionaries(xml_text):
 
 
 if __name__ == "__main__":
-    fn = r"g:\My drive\manuals\dicom\part15.xml"
-    with open(fn, "r", encoding="utf-8") as f:
-        text = f.read()
-    # with urlopen(DICOM_SAFE_PRIVATE_URL) as response:
-    #     text = response.read().decode("utf-8")
+    with urlopen(DICOM_SAFE_PRIVATE_URL) as response:
+        text = response.read().decode("utf-8")
 
     priv_dict = private_dictionaries(text)
     write_dict(priv_dict, DICT_FILENAME, docstring=DICT_DOCSTRING, py_name=PY_NAME)

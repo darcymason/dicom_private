@@ -212,16 +212,16 @@ if __name__ == "__main__":
     from dicom_private.dicts.dicom3tools import dicom3tools_dict
     from dicom_private.dicts.gdcm import gdcm_dict
     from dicom_private.dicts.tcia import tcia_dict
+    from dicom_private.dicts.DICOM_safe import safe_private_dict
 
-    source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict)
-    source_names = ["DCMTK", "dicom3tools", "GDCM", "TCIA"]
+    source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict, safe_private_dict)
+    source_names = ["DCMTK", "dicom3tools", "GDCM", "TCIA", "DICOM safe"]
 
     union_dict = make_union_dict(source_dicts)
-    for creator in ("SIEMENS CSA HEADER", "SIEMENS CSA NON-IMAGE", "SIEMENS CSA REPORT", "SIEMENS CT APPL DATASET"):
-        tbl, contrib = make_creator_compare_table(union_dict[creator], source_names)
-        print(contrib)
+    # for creator in ("SIEMENS CSA HEADER", "SIEMENS CSA NON-IMAGE", "SIEMENS CSA REPORT", "SIEMENS CT APPL DATASET"):
+    #     tbl, contrib = make_creator_compare_table(union_dict[creator], source_names)
+    #     print(contrib)
 
-    xdfdf
     html, unknowns = html_compare(source_dicts, source_names) 
     
     main_file = REPORT_PATH / "index.html"
