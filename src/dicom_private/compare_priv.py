@@ -9,6 +9,18 @@ from html import escape
 from urllib.parse import quote
 
 VR, VM, NAME = range(3)  # index into dict results
+UNKNOWNS = (
+    "unknown",
+    "?",
+    "??",
+    "private data",
+    "<internal",
+    "internal data",
+    "&lt;internal",
+    "other private data",
+    "",
+    "internalvalue",
+)
 
 HTML_DOC_TEMPLATE = """
 <!DOCTYPE html>
@@ -53,6 +65,7 @@ HTML_DOC_TEMPLATE = """
 </html>
 """
 
+
 def make_union_dict(source_dicts):
     """Collapse private dicts into something like:
         creator/tag -> list(each source's result or None),
@@ -71,15 +84,13 @@ def make_union_dict(source_dicts):
     all_creators = sorted(set().union(*[di.keys() for di in source_dicts]))
     for creator in all_creators:
         all_tags = sorted(
-            set().union(
-                *[di[creator].keys() for di in source_dicts if creator in di]
-            )
+            set().union(*[di[creator].keys() for di in source_dicts if creator in di])
         )
         for tag in all_tags:
             entry_list = []
             for source in source_dicts:
                 try:
-                    val = source[creator][tag]                
+                    val = source[creator][tag]
                 except KeyError:
                     val = None
                 entry_list.append(val)
@@ -87,60 +98,62 @@ def make_union_dict(source_dicts):
     return union
 
 
-
 def non_empty_creators(union_dict):
     non_empty = []
     for creator, tagdict in union_dict.items():
         if any(
-            source_entry and source_entry[NAME] not in ["?", "Unknown"]
+            source_entry and source_entry[NAME].lower() not in UNKNOWNS
             for (tag, source_entries) in tagdict.items()
             for source_entry in source_entries
         ):
             non_empty.append(creator)
     return non_empty
 
+
 red = lambda text: f'<span class="diff_sub">{text}</span>'
 green = lambda text: f'<span class="diff_add">{text}</span>'
 yellow = lambda text: f'<span class="diff_chg">{text}</span>'
+
 
 def diff_new(old, new):
     codes = difflib.SequenceMatcher(a=old, b=new).get_opcodes()
     new2 = ""
     had_del = False
-    if new in ("Unknown", "?"):
+    if new in UNKNOWNS:
         return new
     for code in codes:
         op = code[0]
-        if op == "equal": 
-            new2 += new[code[3]:code[4]]
+        if op == "equal":
+            new2 += new[code[3] : code[4]]
         elif op == "delete":
-            new2 += red(old[code[1]:code[2]])
+            new2 += red(old[code[1] : code[2]])
             had_del = True
         elif op == "insert":
-            new2 += green(new[code[3]:code[4]])
+            new2 += green(new[code[3] : code[4]])
         elif op == "replace":
-            new2 += yellow(new[code[3]:code[4]])
+            new2 += yellow(new[code[3] : code[4]])
     return new2 + (f"--> ({new})" if had_del else "")
+
 
 def make_creator_compare_table(tag_dict, source_names):
     """Return one (text-only) 2D table of the compared sources and a list of which 'contributed'
-    First table row is "Tag", then names of sources.    
+    First table row is "Tag", then names of sources.
     Table row is simple list [tag, source1 name or keyword, source2 name or keyword, ...]
     """
 
     rows = [("Tag", *source_names)]
     for tag, entries in tag_dict.items():
         rows.append([tag] + [escape(entry[NAME]) if entry else "" for entry in entries])
-    
+
     # Determine who contributed by columns non-empty (after header)
     # Transpose with zip(*)
     tr = zip(*rows[1:])
     col_non_empty = [
-        any([e and (e.lower() not in ("?", "Unknown")) for e in col]) for col in tr
+        any([e and (e.lower() not in UNKNOWNS) for e in col]) for col in tr
     ]
-    contributed = itertools.compress(source_names, col_non_empty[1:]) # 1: for tag col
+    contributed = itertools.compress(source_names, col_non_empty[1:])  # 1: for tag col
     return rows, list(contributed)
-    
+
 
 def html_compare(source_dicts, source_names):
     """Return two string representing HTML for non-empty and empty creators"""
@@ -162,31 +175,30 @@ def html_compare(source_dicts, source_names):
         content.append(header)
         for tag, vals in tag_dict.items():
             str_vals = [escape(val[NAME]) if val else "" for val in vals]
-            non_empty = [s for s in str_vals if s and s not in ("?", "Unknown")]   
+            non_empty = [s for s in str_vals if s and s.lower() not in UNKNOWNS]
             if non_empty:
                 if len(non_empty) == 1:
                     div_vals = [
-                       f"<div>{green(s) if s==non_empty[0] else s}</div>" 
-                       for s in str_vals
-                    ] 
+                        f"<div>{green(s) if s==non_empty[0] else s}</div>"
+                        for s in str_vals
+                    ]
                 else:
                     div_vals = [
                         f"<div>{diff_new(non_empty[0], s) if s else ""}</div>"
                         for s in str_vals
-                    ] 
+                    ]
             else:  # could include 'Unknown's
                 div_vals = [f"<div>{s}</div>" for s in str_vals]
             content.append(f"<div>{tag}</div>\n{"\n".join(div_vals)}")
-        content.append("</div>") # end of container
+        content.append("</div>")  # end of container
     main_content = "\n".join(main_content)
     unknown_content = "\n".join(unknown_content)
-    num_cols = len(source_dicts) + 1  
-    # Can't get nth-child range to work so just list each one  
+    num_cols = len(source_dicts) + 1
+    # Can't get nth-child range to work so just list each one
     alt_rows_css_def = ",\n".join(
-        f".container > div:nth-child({2*num_cols}n+{i})"
-        for i in range(1, num_cols+1)
+        f".container > div:nth-child({2*num_cols}n+{i})" for i in range(1, num_cols + 1)
     )
-    
+
     html_main = HTML_DOC_TEMPLATE.format(
         num_cols=num_cols, content=main_content, alt_rows_css_def=alt_rows_css_def
     )
@@ -214,7 +226,13 @@ if __name__ == "__main__":
     from dicom_private.dicts.tcia import tcia_dict
     from dicom_private.dicts.DICOM_safe import safe_private_dict
 
-    source_dicts = (dcmtk_dict, dicom3tools_dict, gdcm_dict, tcia_dict, safe_private_dict)
+    source_dicts = (
+        dcmtk_dict,
+        dicom3tools_dict,
+        gdcm_dict,
+        tcia_dict,
+        safe_private_dict,
+    )
     source_names = ["DCMTK", "dicom3tools", "GDCM", "TCIA", "DICOM safe"]
 
     union_dict = make_union_dict(source_dicts)
@@ -222,8 +240,8 @@ if __name__ == "__main__":
     #     tbl, contrib = make_creator_compare_table(union_dict[creator], source_names)
     #     print(contrib)
 
-    html, unknowns = html_compare(source_dicts, source_names) 
-    
+    html, unknowns = html_compare(source_dicts, source_names)
+
     main_file = REPORT_PATH / "index.html"
     unknowns_file = REPORT_PATH / "unknowns.html"
     print(f"Write {main_file}")
@@ -232,4 +250,3 @@ if __name__ == "__main__":
     print(f"Write {unknowns_file}")
     with open(unknowns_file, "w", encoding="utf-8") as f:
         f.write(unknowns)
-    

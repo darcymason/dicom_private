@@ -64,7 +64,7 @@ def private_dictionaries(path) -> dict[str, dict[str, tuple[str, str, str, str]]
     dicts = defaultdict(dict)
     for line in multi_file_reader(path):
         tag = re.sub(r"\((.*?),(.*?)\)", r"\1\2", line.tag)
-        tag=tag.upper()
+        tag = tag.upper().replace("XX", "xx")
         if tag[4:6] == "00":
             tag = f"{tag[:4]}xx{tag[6:]}"   # XX Assume it is a mask!
         dicts[line.owner][tag] = (line.vr, line.vm, line.keyword)
