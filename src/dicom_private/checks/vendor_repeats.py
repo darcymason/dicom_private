@@ -7,7 +7,7 @@ from dicom_private.dicts.dcmtk import dcmtk_dict
 from dicom_private.dicts.dicom3tools import dicom3tools_dict
 from dicom_private.dicts.gdcm import gdcm_dict
 from dicom_private.dicts.tcia import tcia_dict
-
+from dicom_private.dicts.dcm2nii import dcm2nii_dict
     
 
 
@@ -33,3 +33,4 @@ if __name__ == "__main__":
             if len(vals_list) > 1:
                 print(tag)
                 print("\n".join(str(x) for x in vals_list))
+
