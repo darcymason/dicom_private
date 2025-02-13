@@ -11,13 +11,9 @@ from urllib.parse import quote
 VR, VM, NAME = range(3)  # index into dict results
 UNKNOWNS = (
     "unknown",
-    "?",
-    "??",
-    "private data",
     "<internal",
     "internal data",
     "&lt;internal",
-    "other private data",
     "",
     "internalvalue",
 )
@@ -66,6 +62,16 @@ HTML_DOC_TEMPLATE = """
 """
 
 
+def make_keyword(s):
+    s = s.replace(" ", "").replace("_", "")
+    return s
+
+
+def is_unknown(name):
+    name = make_keyword(name).lower()
+    return name.startswith("?") or "privatedata" in name or name in UNKNOWNS
+
+
 def make_union_dict(source_dicts):
     """Collapse private dicts into something like:
         creator/tag -> list(each source's result or None),
@@ -102,7 +108,7 @@ def non_empty_creators(union_dict):
     non_empty = []
     for creator, tagdict in union_dict.items():
         if any(
-            source_entry and source_entry[NAME].lower() not in UNKNOWNS
+            source_entry and not is_unknown(source_entry[NAME])
             for (tag, source_entries) in tagdict.items()
             for source_entry in source_entries
         ):
@@ -119,7 +125,7 @@ def diff_new(old, new):
     codes = difflib.SequenceMatcher(a=old, b=new).get_opcodes()
     new2 = ""
     had_del = False
-    if new in UNKNOWNS:
+    if is_unknown(new):
         return new
     for code in codes:
         op = code[0]
@@ -149,7 +155,7 @@ def make_creator_compare_table(tag_dict, source_names):
     # Transpose with zip(*)
     tr = zip(*rows[1:])
     col_non_empty = [
-        any([e and (e.lower() not in UNKNOWNS) for e in col]) for col in tr
+        any([e and (not is_unknown(e)) for e in col]) for col in tr
     ]
     contributed = itertools.compress(source_names, col_non_empty[1:])  # 1: for tag col
     return rows, list(contributed)
@@ -175,7 +181,7 @@ def html_compare(source_dicts, source_names):
         content.append(header)
         for tag, vals in tag_dict.items():
             str_vals = [escape(val[NAME]) if val else "" for val in vals]
-            non_empty = [s for s in str_vals if s and s.lower() not in UNKNOWNS]
+            non_empty = [s for s in str_vals if s and not is_unknown(s)]
             if non_empty:
                 if len(non_empty) == 1:
                     div_vals = [

@@ -5,14 +5,12 @@ from collections import defaultdict
 import difflib
 import itertools
 from dicom_private.core import REPORT_PATH
-from dicom_private.compare_priv import UNKNOWNS, make_union_dict
+from dicom_private.compare_priv import UNKNOWNS, is_unknown, make_union_dict, make_keyword
 
 VR, VM, NAME = range(3)  # index into dict results
 
 
-def make_keyword(s):
-    s = s.replace(" ", "").replace("_", "")
-    return s
+
 
 def non_similars(source_dicts, threshold_ratio=0.6):
     """Return creator/tag comparisons where sources are dissimilar"""
@@ -28,7 +26,7 @@ def non_similars(source_dicts, threshold_ratio=0.6):
             sanitized_names = [
                 make_keyword(name).lower()
                 for name in names
-                if name and name.lower() not in UNKNOWNS
+                if name and not is_unknown(name)
             ]
             if len(sanitized_names) < 2:
                 continue
@@ -38,21 +36,6 @@ def non_similars(source_dicts, threshold_ratio=0.6):
                 for name1, name2 in itertools.combinations(sanitized_names, 2)
             ):
                 yield  (creator, tag, *names)
-    # for creator in all_creators:
-    #     tag_dict1 = source1[creator]
-    #     tag_dict2 = source2[creator]
-    #     tags = set(tag_dict1.keys()).intersection(tag_dict2.keys())
-    #     for tag in tags:
-    #         name1 = tag_dict1[tag][NAME]
-    #         name2 = tag_dict2[tag][NAME]
-    #         name1_sanitized = make_keyword(name1).lower()
-    #         name2_sanitized = make_keyword(name2).lower()
-    #         if name1.lower() in UNKNOWNS or name2.lower() in UNKNOWNS:
-    #             continue
-    #         seq_matcher = difflib.SequenceMatcher(None, name1_sanitized, name2_sanitized)
-    #         if seq_matcher.ratio() < threshold_ratio:
-    #             if name1_sanitized not in name2_sanitized and name2_sanitized not in name1_sanitized:
-    #                 yield  (creator, tag, name1, name2)
 
 
 if __name__ == "__main__":
@@ -62,15 +45,20 @@ if __name__ == "__main__":
     from dicom_private.dicts.tcia import tcia_dict
     from dicom_private.dicts.DICOM_safe import safe_private_dict
 
-
-    compare_sources = (dicom3tools_dict, gdcm_dict)
-    source_names = ["dicom3tools", "GDCM"]
+    source_dicts = (
+        dcmtk_dict,
+        dicom3tools_dict,
+        gdcm_dict,
+        tcia_dict,
+        safe_private_dict,
+    )
+    source_names = ["DCMTK", "dicom3tools", "GDCM", "TCIA", "DICOM safe"]
 
     # Output as markdown table:
     print(f"|Creator|Tag|{'|'.join(source_names)}|")
     print("|--|--|" + "--|" * len(source_names))
 
-    for diff in non_similars(compare_sources):
+    for diff in non_similars(source_dicts):
         print(f"|{'|'.join(diff)}|")
     # main_file = REPORT_PATH / "non-similar.html"
     # print(f"Write {main_file}")
